@@ -1,0 +1,15 @@
+
+/* Defining Protobuf message between components */
+/* To generate python code from it, we have to run the command: */
+/* protoc messages.proto --python_out=. -> messages_pb2.py source file */
+
+syntax = "proto3";
+
+message storeData {
+    string filename = 1;
+}
+
+
+message getData {
+    string filename = 1;
+}
