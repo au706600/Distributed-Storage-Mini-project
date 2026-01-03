@@ -1,0 +1,4 @@
+Erasure coding works by splitting a unit of data, such as file or object, into multiple  fragments, or data blocks, and then creating additional fragments or parity blocks. 
+That can be used for data recovery. 
+
+For each parity fragment, the erasure coding 

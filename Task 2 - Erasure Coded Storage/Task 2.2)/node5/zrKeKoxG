@@ -1,0 +1,3 @@
+algorithm calculates the parity's value based on the original data fragments. 
+The data and parity fragments are stored across multiple drives to protect against data loss in case a drive fails or data becomes corrupted on one of the drives. 
+If such an even

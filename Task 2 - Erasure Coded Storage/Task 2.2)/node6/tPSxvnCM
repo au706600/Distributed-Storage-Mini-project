@@ -1,0 +1,3 @@
+t occurs, the parity fragments can be used to rebuild the data unit without experiencing data loss. 
+For example, a storage system might use a 5+2 encoding configuration to distribute data across multiple physical drives. 
+In this configuration, the EC algor

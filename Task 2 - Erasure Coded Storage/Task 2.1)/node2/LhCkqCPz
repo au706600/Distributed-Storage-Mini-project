@@ -1,0 +1,3 @@
+ta and parity fragments are stored across multiple drives to protect against data loss in case a drive fails or data becomes corrupted on one of the drives. 
+If such an event occurs, the parity fragments can be used to rebuild the data unit without experiencing data loss. 
+For example, a storage system might use a 5+2 encoding configuration t

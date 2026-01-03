@@ -1,0 +1,6 @@
+Erasure coding works by splitting a unit of data, such as file or object, into multiple  fragments, or data blocks, and then creating additional fragments or parity blocks. 
+That can be used for data recovery. 
+
+For each parity fragment, the erasure coding algorithm calculates the parity's value based on the original data fragments. 
+The data and parity fragments are stored across multiple drives to protect against data loss in case a drive fails or data becomes corrupted on one of the drives. 
+If such an eve
