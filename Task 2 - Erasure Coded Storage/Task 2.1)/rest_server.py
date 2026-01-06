@@ -112,7 +112,7 @@ def download_file(file_id):
     f = dict(f)
     print(f"Requested file metadata: {f}")
 
-    get_id = db.execute('SELECT * FROM file_fragment where file_id = ? order by fragment_index', [file_id])
+    get_id = db.execute('SELECT * FROM file_fragment where file_id = ? group by fragment_name order by fragment_index', [file_id])
 
     fragments_rows = get_id.fetchall()
     coded_fragments = [row['fragment_name'] for row in fragments_rows]

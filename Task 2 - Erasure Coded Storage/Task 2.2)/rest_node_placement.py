@@ -82,7 +82,7 @@ def placement_strategy(strategy, R, chunk_index, nodes):
         return min_copy_sets(nodes, R, chunk_index)
 
     elif strategy == "buddy_approach": 
-        pass
+        return buddy_approach(nodes, R, chunk_index)
     
     else:
         raise ValueError("Invalid node placement strategy")
@@ -94,8 +94,24 @@ def min_copy_sets(nodes, R, chunk_index):
     divide_nodes = [[nodes[(i + j) % len(nodes)] for j in range(R)] for i in range(len(nodes))]
     return divide_nodes[chunk_index % len(nodes)]
 
-def buddy_approach():
-    pass
+def buddy_approach(nodes, R, chunk_index):
+
+    if R != 2:
+        raise ValueError("R needs to be bigger than 2")
+
+    if len(nodes) % 2 != 0:
+        raise ValueError("Must have even number of nodes")
+
+    # Create buddy groups
+    buddy_groups = [
+        nodes[i:i + 2]
+        for i in range(0, len(nodes), 2)
+    ]
+
+    # Select buddy group based on chunk index
+    group = buddy_groups[chunk_index % len(buddy_groups)]
+
+    return group
 
 #-----------------Flask Setup-----------------#
 
@@ -152,7 +168,7 @@ def download_file(file_id):
     print(f"Requested file metadata: {f}")
 
     get_id = db.execute(
-        'SELECT fragment_name, fragment_index, coefficients FROM file_fragment WHERE file_id = ? GROUP BY fragment_index ORDER BY fragment_index',
+        'SELECT fragment_name, fragment_index, coefficients FROM file_fragment WHERE file_id = ? GROUP BY fragment_name ORDER BY fragment_index',
         [file_id]
     )
     fragment_rows = get_id.fetchall()
