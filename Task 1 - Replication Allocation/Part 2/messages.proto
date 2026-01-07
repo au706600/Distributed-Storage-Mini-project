@@ -7,9 +7,13 @@
 
 syntax = "proto3";
 
+/* When the storage nodes and controller communicate via zmq channels, the controller primarily sends StoreData and GetData messages */
+/* StoreData message: Controller instructs a storage node to store file chunks */
+/* GetData message: Controller instructs storage nodes for stored chunks during file retrieval */
+
 message StoreData 
 {
-    string filename = 1;
+    string filename = 1; 
 }
 
 message GetData {

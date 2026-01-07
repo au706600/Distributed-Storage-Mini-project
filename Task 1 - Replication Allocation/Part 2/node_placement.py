@@ -13,15 +13,19 @@ from flask import Flask, g, make_response, request, send_file
 # Set up zmq channels
 context = zmq.Context()
 
+# Socket to send StoreData message
 socket_push = context.socket(zmq.PUSH)
 socket_push.bind("tcp://*:5557")
 
+# Socket to receive results from storage nodes
 socket_pull = context.socket(zmq.PULL)
 socket_pull.bind("tcp://*:5558")
 
+# Socket to publish GetData messages
 socket_pub = context.socket(zmq.PUB)
 socket_pub.bind("tcp://*:5559")
 
+# Give some time for sockets to bind
 time.sleep(1)
 
 
@@ -33,29 +37,14 @@ time.sleep(1)
 def random_string(length = 8):
     return ''.join(random.SystemRandom().choice(string.ascii_letters) for _ in range(length))
 
-
-def write_to_file(data, filename = None):
-
-    if not filename:
-        filename = random_string(length = 8)
-        filename += ".txt"
-    
-    try:
-        with open('./' + filename, 'wb') as f:
-            f.write(data)
-
-    except EnvironmentError as e:
-        print("Error format writing to file: {}".format(e))
-        return None
-    
-    return filename
-
+# Gets a database connection for the current request
 def get_db():
     if 'db' not in g:
         g.db = sqlite3.connect("database.db", detect_types=sqlite3.PARSE_DECLTYPES)
         g.db.row_factory = sqlite3.Row
     return g.db
 
+# Initialize the database with the tables defined in file.sql
 def init_db():
     db = sqlite3.connect("database.db")
     #db.execute("PRAGMA journal_mode=WAL;")
@@ -67,13 +56,15 @@ def init_db():
             pass
     db.close()
 
+# Close the database connection at the end of the request
 def close_db(e=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
-# Node placement strategies
 
+# Node placement strategies based on selected strategy on how to store chunks 
+# that is specified by the user in POSTMAN
 def select_nodes(strategy, R, chunk_index, nodes):
     if strategy == "random_placement":
         return random_placement(nodes, R)
@@ -82,135 +73,51 @@ def select_nodes(strategy, R, chunk_index, nodes):
         return min_copy_sets(nodes, R, chunk_index)
 
     elif strategy == "buddy_approach": 
-        pass
+        return buddy_approach(nodes, R, chunk_index)
     
     else:
         raise ValueError("Invalid node placement strategy")
 
-
-"""
-    Params: 
-        R = Replication factor
-    
-    1. Get a list of available storage nodes from the sqlite database
-    2. Get the file bytes and split it into k chunks
-    3. Randomly select R storage nodes from the list of available storage nodes that we put the chunk replicas on
-"""
-
+# random placement works by randomly selecting R nodes from the available storage nodes through random.sample method
+# and assigning the chunk replicas to these nodes. (Non-deterministic)  
 def random_placement(nodes, R):
     return random.sample(nodes, R)
 
-"""
-def random_placement(R):
-    # Get a list of available storage nodes from the database
-    db = get_db()
-    # Get the active storage nodes
-    cursor = db.execute('SELECT id FROM storage_node where status = 1')
-    if not cursor: 
-        make_response({'message': 'Error connecting to database'}, 500)
-    nodes = [row['id'] for row in cursor.fetchall()]
-    if not nodes:
-        make_response({'message': 'No available storage nodes found'}, 500)
-    
-    # Get the file bytes and split it into k chunks
-    payload = request.get_json()
-    file_id = payload.get('file_id')
-    file_bytes = b64decode(payload.get('contents_b64'))
-    chunk_size = 1024 * 1024  # 1 MB chunk size
-    split_file_bytes = [file_bytes[i:i + chunk_size] for i in range(0, len(file_bytes), chunk_size)]
-
-    # Randomly select R storage nodes from the list of available storage nodes that we put the chunk replicas on
-    for chunk_index, chunk in enumerate(split_file_bytes):
-        selected_nodes = random.sample(nodes, R)
-        #random_task_file_name1 = [random_string(8), random_string(8)]
-        #random_task_file_name2 = [random_string(8), random_string(8)]
-        chunk_names = [random_string(8) for _ in range(R)] 
-        for replica_index, storage_node_id in enumerate(selected_nodes):
-            data_msg = messages_pb2.StoreData()
-            data_msg.filename = chunk_names[replica_index]
-            socket_push.send_multipart([
-                data_msg.SerializeToString(),
-                chunk
-            ])
-            db.execute(
-                'INSERT INTO chunk (file_id, chunk_name, replica_index, chunk_index, storage_node_id) VALUES (?, ?, ?, ?, ?)',
-                (file_id, data_msg.filename, replica_index, chunk_index, storage_node_id)
-            )
-
-    db.commit()
-    return make_response({'message': 'File chunks stored successfully'}, 200)
-
-"""
-
-"""
-    Params: 
-        R = Replication factor
-
-    1. Get a list of available storage nodes from the sqlite database
-    2. Divide the storage nodes into groups of size R through deterministic grouping
-    3. Get the file bytes and split it into k chunks
-    4. For each incoming chunk, we assign it to the copysets
-    5. For each chunk-replica pair, we send a "Store chunk" message to the corresponding storage node in the copyset
-""" 
+# min copy sets works by dividing the available storage nodes into groups of R nodes each.
+# Each group forms a "copy set" for storing chunk replicas. The chunk index is used to select the appropriate copy set for each chunk.
+# (Deterministic grouping)
 def min_copy_sets(nodes, R, chunk_index):
     divide_nodes= [[nodes[(i + j) % len(nodes)] for j in range(R)] for i in range(len(nodes))]
     return divide_nodes[chunk_index % len(nodes)]
 
-"""
-def min_copy_sets(R):
-    db = get_db()
-    cursor = db.execute(
-        'SELECT id FROM storage_node where status = 1 order by id'
-        )
-    if not cursor:
-        make_response({'message': 'Error connecting to database'}, 500)
-    nodes = [row['id'] for row in cursor.fetchall()]
-    if not nodes:
-        make_response({'message': 'No available storage nodes found'}, 500)
-    
-    # Divide the storage nodes into groups of size R through deterministic grouping (cyclic sliding window)
-    divide_nodes = [[nodes[(i + j) % len(nodes)] for j in range(R)] for i in range(len(nodes))]
 
-    # Get the file bytes and split it into k chunks
-    payload = request.get_json()
-    file_id = payload.get('file_id')
-    file_bytes = b64decode(payload.get('contents_b64'))
-    # Split the file into k chunks
-    chunk_size = 1024 * 1024  # 1 MB chunk size
-    split_file_bytes = [file_bytes[i : i + chunk_size] for i in range(0, len(file_bytes), chunk_size)]
-    
-    for chunk_index, chunk in enumerate(split_file_bytes):
-        assign_copyset = divide_nodes[chunk_index % len(nodes)]
-        chunk_names = [random_string(8) for _ in range(R)]
+# buddy approach works by pairing nodes into "buddy groups" of size 2.
+# The chunk index is used to select the appropriate buddy group for each chunk.
+# (Deterministic pairing)
+def buddy_approach(nodes, R, chunk_index):
 
-        for replica_index, storage_node_id in enumerate(assign_copyset):
-            data_msg = messages_pb2.StoreData()
-            data_msg.filename = chunk_names[replica_index]
-            socket_push.send_multipart([
-                data_msg.SerializeToString(), 
-                chunk
-            ])
-            db.execute(
-            'INSERT INTO chunk (file_id, chunk_name, replica_index, chunk_index, storage_node_id) VALUES (?, ?, ?, ?, ?)',
-            (file_id, data_msg.filename, replica_index, chunk_index, storage_node_id)
-        )
+    if R != 2:
+        raise ValueError("R needs to be bigger than 2")
 
-    db.commit()
-    return make_response({'message': 'File chunks stored successfully'}, 200)
+    if len(nodes) % 2 != 0:
+        raise ValueError("Must have even number of nodes")
 
-"""
+    # Create buddy groups
+    buddy_groups = [
+        nodes[i:i + 2]
+        for i in range(0, len(nodes), 2)
+    ]
 
-"""
-def buddy_approach():
-    pass
-"""
+    # Select buddy group based on chunk index
+    group = buddy_groups[chunk_index % len(buddy_groups)]
 
+    return group
 
 #-------------------------------------------
 
 # REST api's
 
-# Flask instance
+# Create Flask instance
 init_db()
 app = Flask(__name__)
 app.teardown_appcontext(close_db)

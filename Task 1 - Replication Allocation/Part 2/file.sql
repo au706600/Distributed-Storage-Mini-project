@@ -21,7 +21,7 @@ create table `chunk` (
 
 
 
--- Store storage node information
+-- Store storage node information and whether they are active or inactive
 create table `storage_node` (
     `id` INTEGER PRIMARY KEY AUTOINCREMENT, 
     `status` BOOLEAN DEFAULT 1  -- 1 for active, 0 for inactive
