@@ -11,38 +11,28 @@ from logging import exception
 
 
 #-----------------ZMQ Setup-----------------#
+
+# Set up zmq channels
 context = zmq.Context()
 
+# Socket to send store requests (storeData message) to the storage nodes
 socket_push = context.socket(zmq.PUSH)
 socket_push.bind("tcp://*:5557")
 
+# Socket to receive responses from storage nodes
 socket_pull = context.socket(zmq.PULL)
 socket_pull.bind("tcp://*:5558")
 
+# Socket to send requests for fragment status and data
 socket_pub = context.socket(zmq.PUB)
 socket_pub.bind("tcp://*:5559")
 
+# Give some time for sockets to bind properly
 time.sleep(1)
 
 #------------  Utility Functions-------------#
 
-def random_string(length = 8):
-    return ''.join(random.SystemRandom().choice(string.ascii_letters) for _ in range(length))
-
-def write_to_file(data, filename = None):
-    if filename is None: 
-        filename = random_string(8)
-        filename += '.bin'
-    
-    try: 
-        with open('./' + filename, 'wb') as f: 
-            f.write(data)
-    except EnvironmentError as e: 
-        logging.error(f"Error writing to file: {e}")
-        return None
-    
-    return filename
-
+# Gets a database connection for the current request
 def get_db():
     if 'db' not in g: 
         g.db = sqlite3.connect(
@@ -53,6 +43,7 @@ def get_db():
 
     return g.db 
 
+# Initialize the database with the tables defined in file.sql
 def init_db():
     db = sqlite3.connect("database.db")
     if db is None:
@@ -65,6 +56,7 @@ def init_db():
     
     db.close()
 
+# Close the database connection at the end of the request
 def close_db(e=None):
     db = g.pop('db', None)
     if db is not None:
@@ -74,6 +66,8 @@ def close_db(e=None):
 
 #------------------Configurable Placement of Fragments------------------#
 
+# Fragment placement strategies based on selected strategy on how to store fragments
+# that is specified by the user in POSTMAN
 def placement_strategy(strategy, R, chunk_index, nodes):
     if strategy == "random_placement":
         return random_placement(nodes, R)
@@ -86,7 +80,8 @@ def placement_strategy(strategy, R, chunk_index, nodes):
     
     else:
         raise ValueError("Invalid node placement strategy")
-    
+
+
 def random_placement(nodes, R):
     return random.sample(nodes, R)
 
@@ -115,6 +110,7 @@ def buddy_approach(nodes, R, chunk_index):
 
 #-----------------Flask Setup-----------------#
 
+# Create Flask instance
 init_db()
 app = Flask(__name__)
 app.teardown_appcontext(close_db)
@@ -155,6 +151,18 @@ def get_file_fragments(file_id):
 
 @app.route('/files/<int:file_id>/download', methods=['GET'])
 def download_file(file_id):
+    """"
+        Download a file with the given file_id by reconstructing from its fragments (Reed Solomon)
+
+        The downloading process consists of the following steps: 
+        1. The controller receives a GET request for a file with the given file ID.
+        2. The controller then looks up the database to get the metadata of the file and its associated fragments.
+        3. For each fragment, we store its name and the corresponding indices used for decoding, since we need to know which fragments to use for reconstruction.
+        4. The controller sends requests to the storage nodes to check which fragments are available. 
+        5. Once enough fragments are available (at least k fragments), the controller reconstructs the original file using Reed-Solomon decoding.
+        6. Send the reconstructed file back to the client in the HTTP response.
+    
+    """
     db = get_db()
     cursor = db.execute('SELECT * FROM file where id = ?', [file_id])
     if not cursor: 
@@ -199,6 +207,17 @@ def download_file(file_id):
 
 @app.route('/files', methods=['POST'])
 def add_files():
+    """
+        Upload a file, split it into fragments using Reed-Solomon coding, and store the fragments across storage nodes.
+
+        The uploading process consists of the following steps:
+        1. The client sends a POST request with a given file along with parameters k and l.
+        2. The controller receives the file and reads its content, size, and metadata.
+        3. The controller stores the file metadata in the database and retrieves the number of active storage nodes.
+        4. The controller calls the store_file function to split the file into k + l fragments using Reed-Solomon coding.
+        5. The controller stores the fragment metadata in the database, including which storage node each fragment is stored on and the encoding coefficients.
+        6. Finally, the controller returns a response to the client with the file ID which can be used for retrieving file metadata or downloading file (see function above). 
+    """
     payload = request.form
     k = int(payload.get('k'))
     l = int(payload.get('l'))
