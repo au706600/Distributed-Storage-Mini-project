@@ -5,9 +5,16 @@ import time
 import random
 import threading
 
+"""
+This file is used for starting the lead node (rest_server.py), and multiple storage nodes (storage_node.py)
+that you specify by modifying the NUM_NODES variable.
+It also provides a simple command line interface for killing random storage nodes to simulate failures.
+"""
+
 PYTHON = sys.executable
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Number of storage nodes to start
 NUM_NODES = 4
 
 master_process = None

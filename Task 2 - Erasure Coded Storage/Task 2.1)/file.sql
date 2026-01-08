@@ -1,4 +1,5 @@
 
+-- Store file meta information
 CREATE TABLE `file`
 (
     `id` INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -11,12 +12,15 @@ CREATE TABLE `file`
     `c_fragments` INTEGER -- c (total fragments = k + l)
 );
 
+-- Store storage node information and whether they are active
 CREATE TABLE `storage_node`
 (
     `id` INTEGER PRIMARY KEY AUTOINCREMENT, 
     `status` BOOLEAN DEFAULT 1
 );
 
+-- Store file fragment information and on which storage node they are stored. 
+-- Also store the encoding coefficients used for generating the fragment and when decoding it uses coefficients for linear combinations.
 CREATE TABLE `file_fragment`
 (
     `id` INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +28,7 @@ CREATE TABLE `file_fragment`
     `storage_node_id` INTEGER,
     `fragment_name` TEXT,
     `fragment_index` INTEGER,
-    `coefficients` BLOB,
+    `coefficients` BLOB, 
     FOREIGN KEY(file_id) REFERENCES file(id),
     FOREIGN KEY(storage_node_id) REFERENCES storage_node(id)
 );
