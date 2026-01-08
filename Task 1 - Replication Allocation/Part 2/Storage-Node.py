@@ -75,9 +75,6 @@ while True:
         data_msg.ParseFromString(message[0])
         data = message[1]
         print(f"Chunk to store: {data_msg.filename} with size {len(data)} bytes")
-        
-        #with open('/' + data_msg.filename, 'wb') as f:
-            #f.write(data)
 
         # Store the data in the specified data folder with random filename
         write_to_file(data, filename = os.path.join(data_folder, data_msg.filename))
